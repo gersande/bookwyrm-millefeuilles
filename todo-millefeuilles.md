@@ -1,0 +1,2 @@
+- [ ] configure a service file for bookwyrm
+- [ ] set up database backups
