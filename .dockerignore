@@ -5,4 +5,5 @@ __pycache__
 .git
 .github
 .pytest*
+.env
 certbot/
