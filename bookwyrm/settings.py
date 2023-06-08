@@ -417,3 +417,7 @@ if HTTP_X_FORWARDED_PROTO:
 # Do not change this setting unless you already have an existing
 # user with the same username - in which case you should change it!
 INSTANCE_ACTOR_USERNAME = "bookwyrm.instance.actor"
+
+
+# adjust CSP to allow loading of images from img.shields.io for liberapay badge
+CSP_IMG_SRC = CSP_DEFAULT_SRC + ["img.shields.io"]
