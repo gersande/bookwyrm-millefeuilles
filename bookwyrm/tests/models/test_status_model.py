@@ -135,6 +135,41 @@ class Status(TestCase):
         self.assertEqual(activity["content"], "<p>test content</p>")
         self.assertEqual(activity["sensitive"], False)
 
+    def test_status_with_hashtag_to_activity(self, *_):
+        """status with hashtag with a "pure" serializer"""
+        tag = models.Hashtag.objects.create(name="#content")
+        status = models.Status.objects.create(
+            content="test #content", user=self.local_user
+        )
+        status.mention_hashtags.add(tag)
+
+        activity = status.to_activity(pure=True)
+        self.assertEqual(activity["id"], status.remote_id)
+        self.assertEqual(activity["type"], "Note")
+        self.assertEqual(activity["content"], "<p>test #content</p>")
+        self.assertEqual(activity["sensitive"], False)
+        self.assertEqual(activity["tag"][0]["type"], "Hashtag")
+        self.assertEqual(activity["tag"][0]["name"], "#content")
+        self.assertEqual(
+            activity["tag"][0]["href"], f"https://{settings.DOMAIN}/hashtag/{tag.id}"
+        )
+
+    def test_status_with_mention_to_activity(self, *_):
+        """status with mention with a "pure" serializer"""
+        status = models.Status.objects.create(
+            content="test @rat@rat.com", user=self.local_user
+        )
+        status.mention_users.add(self.remote_user)
+
+        activity = status.to_activity(pure=True)
+        self.assertEqual(activity["id"], status.remote_id)
+        self.assertEqual(activity["type"], "Note")
+        self.assertEqual(activity["content"], "<p>test @rat@rat.com</p>")
+        self.assertEqual(activity["sensitive"], False)
+        self.assertEqual(activity["tag"][0]["type"], "Mention")
+        self.assertEqual(activity["tag"][0]["name"], f"@{self.remote_user.username}")
+        self.assertEqual(activity["tag"][0]["href"], self.remote_user.remote_id)
+
     def test_status_to_activity_tombstone(self, *_):
         """subclass of the base model version with a "pure" serializer"""
         status = models.Status.objects.create(
@@ -177,7 +212,7 @@ class Status(TestCase):
     def test_generated_note_to_pure_activity(self, *_):
         """subclass of the base model version with a "pure" serializer"""
         status = models.GeneratedNote.objects.create(
-            content="test content", user=self.local_user
+            content="reads", user=self.local_user
         )
         status.mention_books.set([self.book])
         status.mention_users.set([self.local_user])
@@ -185,7 +220,7 @@ class Status(TestCase):
         self.assertEqual(activity["id"], status.remote_id)
         self.assertEqual(
             activity["content"],
-            f'mouse test content <a href="{self.book.remote_id}">"Test Edition"</a>',
+            f'mouse reads <a href="{self.book.remote_id}"><i>Test Edition</i></a>',
         )
         self.assertEqual(len(activity["tag"]), 2)
         self.assertEqual(activity["type"], "Note")
@@ -214,14 +249,18 @@ class Status(TestCase):
     def test_comment_to_pure_activity(self, *_):
         """subclass of the base model version with a "pure" serializer"""
         status = models.Comment.objects.create(
-            content="test content", user=self.local_user, book=self.book
+            content="test content", user=self.local_user, book=self.book, progress=27
         )
         activity = status.to_activity(pure=True)
         self.assertEqual(activity["id"], status.remote_id)
         self.assertEqual(activity["type"], "Note")
         self.assertEqual(
             activity["content"],
-            f'test content<p>(comment on <a href="{self.book.remote_id}">"Test Edition"</a>)</p>',
+            (
+                "test content"
+                f'<p>(comment on <a href="{self.book.remote_id}">'
+                "<i>Test Edition</i></a>, p. 27)</p>"
+            ),
         )
         self.assertEqual(activity["attachment"][0]["type"], "Document")
         # self.assertTrue(
@@ -260,7 +299,11 @@ class Status(TestCase):
         self.assertEqual(activity["type"], "Note")
         self.assertEqual(
             activity["content"],
-            f'a sickening sense <p>-- <a href="{self.book.remote_id}">"Test Edition"</a></p>test content',
+            (
+                "a sickening sense "
+                f'<p>— <a href="{self.book.remote_id}">'
+                "<i>Test Edition</i></a></p>test content"
+            ),
         )
         self.assertEqual(activity["attachment"][0]["type"], "Document")
         self.assertTrue(
@@ -270,6 +313,29 @@ class Status(TestCase):
             )
         )
         self.assertEqual(activity["attachment"][0]["name"], "Test Edition")
+
+    def test_quotation_page_serialization(self, *_):
+        """serialization of quotation page position"""
+        tests = [
+            ("single pos", 7, None, "p. 7"),
+            ("page range", 7, 10, "pp. 7-10"),
+        ]
+        for desc, beg, end, pages in tests:
+            with self.subTest(desc):
+                status = models.Quotation.objects.create(
+                    quote="<p>my quote</p>",
+                    content="",
+                    user=self.local_user,
+                    book=self.book,
+                    position=beg,
+                    endposition=end,
+                    position_mode="PG",
+                )
+                activity = status.to_activity(pure=True)
+                self.assertRegex(
+                    activity["content"],
+                    f'^<p>"my quote"</p> <p>— <a .+</a>, {pages}</p>$',
+                )
 
     def test_review_to_activity(self, *_):
         """subclass of the base model version with a "pure" serializer"""

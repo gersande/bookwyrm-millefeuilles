@@ -9,7 +9,7 @@ x-logging:
 
 services:
   nginx:
-    image: nginx:latest
+    image: nginx:1.25.2
     logging: *default-logging
     restart: unless-stopped
     ports:
@@ -46,7 +46,7 @@ services:
   web:
     build: .
     env_file: .env
-    command: gunicorn bookwyrm.wsgi:application --bind 0.0.0.0:8000
+    command: gunicorn bookwyrm.wsgi:application --threads=8 --bind 0.0.0.0:8000
     logging: *default-logging
     volumes:
       - .:/app
@@ -61,7 +61,7 @@ services:
     ports:
       - "127.0.0.1:8000:8000"
   redis_activity:
-    image: redis
+    image: redis:7.2.1
     command: redis-server --requirepass ${REDIS_ACTIVITY_PASSWORD} --appendonly yes --port ${REDIS_ACTIVITY_PORT}
     logging: *default-logging
     volumes:
@@ -72,7 +72,7 @@ services:
       - main
     restart: on-failure
   redis_broker:
-    image: redis
+    image: redis:7.2.1
     command: redis-server --requirepass ${REDIS_BROKER_PASSWORD} --appendonly yes --port ${REDIS_BROKER_PORT}
     logging: *default-logging
     volumes:
@@ -87,7 +87,8 @@ services:
     build: .
     networks:
       - main
-    command: celery -A celerywyrm worker -l info -Q high_priority,medium_priority,low_priority,imports,broadcast
+    command: celery -A celerywyrm worker -l info -Q high_priority,medium_priority,low_priority,streams,images,suggested_users,email,connectors,lists,inbox,imports,import_triggered,broadcast,misc
+
     logging: *default-logging
     volumes:
       - .:/app
